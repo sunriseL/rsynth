@@ -7,6 +7,8 @@ use lockfree::prelude::spsc;
 use pitch_calc::{LetterOctave, Letter};
 use midi::MidiEvent;
 use synth::Message;
+extern crate piston_window;
+use piston_window::*;
 
 fn main() {
     let host = cpal::default_host();
@@ -61,12 +63,49 @@ where
     )?;
     tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::C, 3), 100)));
     stream.play()?;
+    let mut window: PistonWindow =
+        WindowSettings::new("Hello Piston!", [640, 480])
+        .exit_on_esc(true).build().unwrap();
+    while let Some(event) = window.next() {
+        if let Some(Button::Keyboard(key)) = event.press_args() {
+            match key {
+                Key::A => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::C, 3), 100)));}
+                Key::S => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::D, 3), 100)));}
+                Key::D => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::E, 3), 100)));}
+                Key::F => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::F, 3), 100)));}
+                Key::G => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::G, 3), 100)));}
+                Key::H => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::A, 3), 100)));}
+                Key::J => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::B, 3), 100)));}
+                Key::K => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::C, 4), 100)));}
+                _ => {println!("unsupported char");}
+            }
+            println!("press {:?}", key);
+        }
+        if let Some(Button::Keyboard(key)) = event.release_args() {
+            println!("release {:?}", key);
+            match key {
+                Key::A => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::C, 3))));}
+                Key::S => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::D, 3))));}
+                Key::D => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::E, 3))));}
+                Key::F => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::F, 3))));}
+                Key::G => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::G, 3))));}
+                Key::H => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::A, 3))));}
+                Key::J => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::B, 3))));}
+                Key::K => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::C, 4))));}
+                _ => {println!("unsupported char");}
+            }
+        }
+        /*
+        window.draw_2d(&event, |context, graphics, _device| {
+            clear([1.0; 4], graphics);
+            rectangle([1.0, 0.0, 0.0, 1.0], // red
+                      [0.0, 0.0, 100.0, 100.0],
+                      context.transform,
+                      graphics);
+        });
+        */
+    }
 
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::C, 3))));
-    std::thread::sleep(std::time::Duration::from_secs(3));
-    tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::A, 3), 100)));
-    std::thread::sleep(std::time::Duration::from_secs(17));
 
     Ok(())
 }

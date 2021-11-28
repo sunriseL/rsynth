@@ -75,12 +75,16 @@ impl Envlope for ADSR {
         };
         if let Some(end) = end {
             let end_time = end.as_secs_f32();
+            // println!("current_time {} end_time {}", current_time, end_time);
             if current_time - end_time < 0.0 {
                 calc(current_time)
             } else if current_time - end_time < self.release {
-                let result = calc(end_time);
-                (1.0 - (current_time - end_time) / self.release) * result
+                let mut result = calc(end_time);
+                result = (1.0 - (current_time - end_time) / self.release) * result;
+                // println!("release envelope {}", result);
+                result
             } else {
+                // println!("note over current_time is {} end_time is {}", current_time, end_time);
                 0.0
             }
         } else {
@@ -126,7 +130,7 @@ impl Oscillator {
             volume: Volume::new(0.4).unwrap(),
             // waveform: Box::new(TriangleWaveform {}),
             amp: ADSR {
-                attack: 0.001,
+                attack: 0.1,
                 decay: 1.0,
                 sustain: 0.5,
                 release: 2.0,
@@ -139,7 +143,7 @@ impl Oscillator {
             volume: Volume::new(0.1).unwrap(),
             // waveform: Box::new(SquareWaveform {}),
             amp: ADSR {
-                attack: 0.001,
+                attack: 0.1,
                 decay: 1.0,
                 sustain: 0.5,
                 release: 2.0,
@@ -150,7 +154,8 @@ impl Oscillator {
     fn waveform_make_sample(&self, duration: Duration, freq: f32) -> Frame {
         let duration = duration.as_secs_f64();
         let pi2 = 2.0 * PI;
-        (duration * freq as f64 * pi2).sin().asin() as f32
+        // (duration * freq as f64 * pi2).sin().asin() as f32
+        (duration * freq as f64 * pi2).sin() as f32
     }
     fn make_sample(&self, duration: Duration, end: Option<&Duration>, freq: f32) -> Frame {
         self.waveform_make_sample(duration, freq + self.freq_offset)
@@ -213,11 +218,14 @@ impl Synthesiser {
                 Message::MidiMessage(midi_event) => {
                     match midi_event {
                         MidiEvent::NoteOff(note) => {
-                            self.end_duration = Some(SystemTime::now().duration_since(self.start_time.unwrap()).unwrap());
+                            if note == self.current_note.unwrap() {
+                                self.end_duration = Some(SystemTime::now().duration_since(self.start_time.unwrap()).unwrap());
+                            }
                         },
                         MidiEvent::NoteOn(note, velocity) => {
                             self.current_note = Some(note);
                             self.start_time = Some(SystemTime::now());
+                            self.frame_count = 0;
                             self.end_duration = None;
                         },
                     }
