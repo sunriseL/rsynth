@@ -5,6 +5,7 @@ extern crate lockfree;
 use lockfree::{channel::spsc, prelude::spsc::Receiver, prelude::spsc::Sender};
 use pitch_calc::LetterOctave;
 use std::time::SystemTime;
+use std::cmp::min;
 
 use crate::midi::MidiEvent;
 
@@ -51,7 +52,7 @@ pub trait Waveform {
 }
 
 pub trait Envlope {
-    fn get_envlope(&self, duration: Duration) -> f32;
+    fn get_envlope(&self, duration: Duration, end: Option<&Duration>) -> f32;
 }
 
 struct ADSR {
@@ -61,19 +62,29 @@ struct ADSR {
     release: f32,
 }
 impl Envlope for ADSR {
-    fn get_envlope(&self, duration: Duration) -> f32 {
-        let d = duration.as_secs_f32();
-        let t = 5.0; // Hardcode note over time
-        if d < self.attack {
-            d / self.attack
-        } else if d < self.attack + self.decay {
-            1.0 - (d - self.attack) / self.decay * (1.0 - self.sustain)
-        } else if d < t {
-            self.sustain
-        } else if d < t + self.release {
-            (1.0 - (d - t) / self.release) * self.sustain
+    fn get_envlope(&self, duration: Duration, end: Option<&Duration>) -> f32 {
+        let current_time = duration.as_secs_f32();
+        let calc = |t: f32| {
+            if t < self.attack {
+                t / self.attack
+            } else if t < self.attack + self.decay {
+                1.0 - (t - self.attack) / self.decay * (1.0 - self.sustain)
+            } else {
+                self.sustain
+            }
+        };
+        if let Some(end) = end {
+            let end_time = end.as_secs_f32();
+            if current_time - end_time < 0.0 {
+                calc(current_time)
+            } else if current_time - end_time < self.release {
+                let result = calc(end_time);
+                (1.0 - (current_time - end_time) / self.release) * result
+            } else {
+                0.0
+            }
         } else {
-            0.0
+            calc(current_time)
         }
     }
 }
@@ -141,9 +152,9 @@ impl Oscillator {
         let pi2 = 2.0 * PI;
         (duration * freq as f64 * pi2).sin().asin() as f32
     }
-    fn make_sample(&self, duration: Duration, freq: f32) -> Frame {
+    fn make_sample(&self, duration: Duration, end: Option<&Duration>, freq: f32) -> Frame {
         self.waveform_make_sample(duration, freq + self.freq_offset)
-            * self.amp.get_envlope(duration)
+            * self.amp.get_envlope(duration, end)
             * self.volume.get_volume()
     }
 }
@@ -153,7 +164,7 @@ pub struct Synthesiser {
     sample_rate: SampleRate,
     oscillators: Vec<Oscillator>,
     start_time: Option<SystemTime>,
-    end_time: Option<SystemTime>,
+    end_duration: Option<Duration>,
     current_note: Option<LetterOctave>,
     frame_count: u64,
     message_receiver: Receiver<Message>,
@@ -170,7 +181,7 @@ impl Synthesiser {
             sample_rate,
             oscillators: Vec::new(),
             start_time: None,
-            end_time: None,
+            end_duration: None,
             current_note: None,
             frame_count: 0,
             message_receiver,
@@ -182,36 +193,15 @@ impl Synthesiser {
     }
 
     pub fn next_sample(&mut self) -> Frame {
-        let time = SystemTime::now();
         let sample_rate = self.sample_rate.0 as f32;
         let mut frame = 0.0f32;
         if let Some(note) = self.current_note {
             for oscillator in &self.oscillators {
-                frame += oscillator.make_sample(Duration::from_secs_f32(self.frame_count as f32 / sample_rate), note.hz())
+                frame += oscillator.make_sample(Duration::from_secs_f32(self.frame_count as f32 / sample_rate), self.end_duration.as_ref(), note.hz())
             }
             self.frame_count += 1;
         } 
         frame
-    }
-
-    pub fn make_samples(&self, duration: Duration, freq: f32) -> VecDeque<Frame> {
-        let mut samples: VecDeque<Frame> = VecDeque::new();
-        let sample_rate = self.sample_rate.0;
-        let mut time: u64 = 0;
-        let end: u64 = (duration.as_secs_f32() * sample_rate as f32).ceil() as u64;
-
-        while time < end {
-            let mut frame = 0.0;
-            for oscillator in &self.oscillators {
-                frame += oscillator.make_sample(Duration::from_secs_f32(time as f32 / sample_rate as f32), freq);
-            }
-            samples.push_back(frame);
-            // println!("time {} frame {}", time, frame);
-            time += 1;
-        }
-        println!("len of samples is {}", samples.len());
-
-        samples
     }
 
     pub fn process_message(&mut self) {
@@ -223,11 +213,12 @@ impl Synthesiser {
                 Message::MidiMessage(midi_event) => {
                     match midi_event {
                         MidiEvent::NoteOff(note) => {
-                            self.end_time = Some(SystemTime::now());
+                            self.end_duration = Some(SystemTime::now().duration_since(self.start_time.unwrap()).unwrap());
                         },
                         MidiEvent::NoteOn(note, velocity) => {
                             self.current_note = Some(note);
                             self.start_time = Some(SystemTime::now());
+                            self.end_duration = None;
                         },
                     }
                 },
