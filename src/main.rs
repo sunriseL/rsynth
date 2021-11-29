@@ -1,5 +1,7 @@
 mod synth;
 mod midi;
+mod oscillator;
+mod volume;
 
 extern crate cpal;
 use std::rc::Rc;
@@ -12,7 +14,8 @@ use midi::MidiEvent;
 use synth::SynthMessage;
 
 extern crate fltk;
-use fltk::{app, enums, frame::Frame, group::Pack, prelude::*, window::Window};
+use fltk::{app, enums, enums::*, prelude::*, window::Window};
+use fltk::valuator::Slider;
 
 fn main() {
     let host = cpal::default_host();
@@ -35,10 +38,10 @@ where
     let (tx, rx) = spsc::create::<synth::SynthMessage>();
 
     let mut synth = synth::Synthesiser::new(config.sample_rate, rx);
-    synth.add_oscillator(synth::Oscillator::new());
+    synth.add_oscillator(oscillator::Oscillator::new());
     let mut offset = -2.0f32;
     while offset < 1.1 {
-        synth.add_oscillator(synth::Oscillator::new2(offset));
+        synth.add_oscillator(oscillator::Oscillator::new2(offset));
         offset += 0.25;
     }
     /*/
@@ -70,14 +73,19 @@ where
     tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::C, 3), 100))).unwrap();
     stream.play()?;
     let app = app::App::default();
-    let mut wind = Window::default().with_size(160, 200).with_label("Rsynth");
+    let mut wind = Window::default().with_size(1000, 800).with_label("Rsynth");
+    let mut slider = Slider::new(1000 - 50, 10, 20, 200, "Volume");
+    slider.set_align(Align::Bottom);
+    slider.set_bounds(0., 200.);
+    slider.set_value(20.);
+    slider.do_callback();
     wind.end();
     wind.show();
     let mut last_char = '-';
     wind.handle(move |_, ev| {
         match ev {
             enums::Event::KeyDown => {
-                if last_char == app::event_key().to_char().unwrap() {return false;}
+                if last_char == app::event_key().to_char().unwrap() {return true;}
                 match app::event_key().to_char().unwrap() {
                     'a' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::C, 3), 100))).unwrap();}
                     's' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::D, 3), 100))).unwrap();}
@@ -90,6 +98,8 @@ where
                     _ => {}
                 }
                 last_char = app::event_key().to_char().unwrap();
+                // println!("key down {}", app::event_key().to_char().unwrap());
+                // println!("key down key_down is {}", app::event_key_down(app::event_key()));
                 true
             },
             enums::Event::KeyUp => {
@@ -104,6 +114,8 @@ where
                     'k' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::C, 4)))).unwrap();}
                     _ => {}
                 }
+                // println!("key up {}", app::event_key().to_char().unwrap());
+                // println!("key up key_down is {}", app::event_key_down(app::event_key()));
                 last_char = '-';
                 true
             }
