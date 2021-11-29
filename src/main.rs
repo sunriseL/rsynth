@@ -2,13 +2,17 @@ mod synth;
 mod midi;
 
 extern crate cpal;
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use cpal::traits::{HostTrait, DeviceTrait, StreamTrait};
 use lockfree::prelude::spsc;
 use pitch_calc::{LetterOctave, Letter};
 use midi::MidiEvent;
-use synth::Message;
-extern crate piston_window;
-use piston_window::*;
+use synth::SynthMessage;
+
+extern crate fltk;
+use fltk::{app, enums, frame::Frame, group::Pack, prelude::*, window::Window};
 
 fn main() {
     let host = cpal::default_host();
@@ -28,7 +32,7 @@ where
 {
     let channels = config.channels as usize;
 
-    let (mut tx, rx) = spsc::create::<synth::Message>();
+    let (tx, rx) = spsc::create::<synth::SynthMessage>();
 
     let mut synth = synth::Synthesiser::new(config.sample_rate, rx);
     synth.add_oscillator(synth::Oscillator::new());
@@ -61,51 +65,53 @@ where
         },
         err_fn,
     )?;
-    tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::C, 3), 100)));
+    let original_tx =Rc::new(RefCell::new(tx));
+    let tx = original_tx.clone();
+    tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::C, 3), 100))).unwrap();
     stream.play()?;
-    let mut window: PistonWindow =
-        WindowSettings::new("Hello Piston!", [640, 480])
-        .exit_on_esc(true).build().unwrap();
-    while let Some(event) = window.next() {
-        if let Some(Button::Keyboard(key)) = event.press_args() {
-            match key {
-                Key::A => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::C, 3), 100)));}
-                Key::S => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::D, 3), 100)));}
-                Key::D => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::E, 3), 100)));}
-                Key::F => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::F, 3), 100)));}
-                Key::G => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::G, 3), 100)));}
-                Key::H => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::A, 3), 100)));}
-                Key::J => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::B, 3), 100)));}
-                Key::K => {tx.send(Message::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::C, 4), 100)));}
-                _ => {println!("unsupported char");}
+    let app = app::App::default();
+    let mut wind = Window::default().with_size(160, 200).with_label("Rsynth");
+    wind.end();
+    wind.show();
+    let mut last_char = '-';
+    wind.handle(move |_, ev| {
+        match ev {
+            enums::Event::KeyDown => {
+                if last_char == app::event_key().to_char().unwrap() {return false;}
+                match app::event_key().to_char().unwrap() {
+                    'a' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::C, 3), 100))).unwrap();}
+                    's' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::D, 3), 100))).unwrap();}
+                    'd' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::E, 3), 100))).unwrap();}
+                    'f' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::F, 3), 100))).unwrap();}
+                    'g' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::G, 3), 100))).unwrap();}
+                    'h' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::A, 3), 100))).unwrap();}
+                    'j' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::B, 3), 100))).unwrap();}
+                    'k' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::C, 4), 100))).unwrap();}
+                    _ => {}
+                }
+                last_char = app::event_key().to_char().unwrap();
+                true
+            },
+            enums::Event::KeyUp => {
+                match app::event_key().to_char().unwrap() {
+                    'a' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::C, 3)))).unwrap();}
+                    's' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::D, 3)))).unwrap();}
+                    'd' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::E, 3)))).unwrap();}
+                    'f' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::F, 3)))).unwrap();}
+                    'g' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::G, 3)))).unwrap();}
+                    'h' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::A, 3)))).unwrap();}
+                    'j' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::B, 3)))).unwrap();}
+                    'k' => {tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::C, 4)))).unwrap();}
+                    _ => {}
+                }
+                last_char = '-';
+                true
             }
-            println!("press {:?}", key);
+            _ => false,
         }
-        if let Some(Button::Keyboard(key)) = event.release_args() {
-            println!("release {:?}", key);
-            match key {
-                Key::A => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::C, 3))));}
-                Key::S => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::D, 3))));}
-                Key::D => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::E, 3))));}
-                Key::F => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::F, 3))));}
-                Key::G => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::G, 3))));}
-                Key::H => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::A, 3))));}
-                Key::J => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::B, 3))));}
-                Key::K => {tx.send(Message::MidiMessage(MidiEvent::NoteOff(LetterOctave(Letter::C, 4))));}
-                _ => {println!("unsupported char");}
-            }
-        }
-        /*
-        window.draw_2d(&event, |context, graphics, _device| {
-            clear([1.0; 4], graphics);
-            rectangle([1.0, 0.0, 0.0, 1.0], // red
-                      [0.0, 0.0, 100.0, 100.0],
-                      context.transform,
-                      graphics);
-        });
-        */
-    }
+    });
 
+    while app.wait() {}
 
     Ok(())
 }

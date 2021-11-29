@@ -11,6 +11,7 @@ use crate::midi::MidiEvent;
 
 use f32 as Frame;
 
+#[derive(Debug)]
 struct Volume {
     volume: f32,
 }
@@ -47,14 +48,19 @@ impl Volume {
     }
 }
 
-pub trait Waveform {
-    fn make_sample(&self, duration: Duration, freq: f32) -> Frame;
+#[derive(Debug)]
+enum Waveform {
+    Sine,
+    Triangle,
+    Square,
 }
+
 
 pub trait Envlope {
     fn get_envlope(&self, duration: Duration, end: Option<&Duration>) -> f32;
 }
 
+#[derive(Debug)]
 struct ADSR {
     attack: f32,
     decay: f32,
@@ -93,32 +99,9 @@ impl Envlope for ADSR {
     }
 }
 
-
-struct SineWaveform {}
-impl Waveform for SineWaveform {
-    fn make_sample(&self, duration: Duration, freq: f32) -> Frame {
-        let duration = duration.as_secs_f64();
-        let pi2 = 2.0 * PI;
-        (duration * freq as f64 * pi2).sin() as f32
-    }
-}
-struct TriangleWaveform {}
-impl Waveform for TriangleWaveform {
-    fn make_sample(&self, duration: Duration, freq: f32) -> Frame {
-        let duration = duration.as_secs_f64();
-        let pi2 = 2.0 * PI;
-        (duration * freq as f64 * pi2).sin().asin() as f32
-    }
-}
-struct SquareWaveform {}
-impl Waveform for SquareWaveform {
-    fn make_sample(&self, duration: Duration, freq: f32) -> Frame {
-        let duration = duration.as_secs_f64();
-        let pi2 = 2.0 * PI;
-        if (duration * freq as f64 * pi2).sin() > 0.0 {1.0} else {-1.0}
-    }
-}
+#[derive(Debug)]
 pub struct Oscillator {
+    waveform: Waveform,
     volume: Volume,
     amp: ADSR,
     freq_offset: f32,
@@ -136,6 +119,7 @@ impl Oscillator {
                 release: 2.0,
             },
             freq_offset: 0.0,
+            waveform: Waveform::Sine,
         }
     }
     pub fn new2(freq_offset: f32) -> Self {
@@ -148,14 +132,24 @@ impl Oscillator {
                 sustain: 0.5,
                 release: 2.0,
             },
-            freq_offset
+            freq_offset,
+            waveform: Waveform::Sine,
         }
     }
     fn waveform_make_sample(&self, duration: Duration, freq: f32) -> Frame {
         let duration = duration.as_secs_f64();
         let pi2 = 2.0 * PI;
-        // (duration * freq as f64 * pi2).sin().asin() as f32
-        (duration * freq as f64 * pi2).sin() as f32
+        match self.waveform {
+            Waveform::Sine => {
+                (duration * freq as f64 * pi2).sin() as f32
+            },
+            Waveform::Square => {
+                if (duration * freq as f64 * pi2).sin() > 0.0 {1.0} else {-1.0}
+            },
+            Waveform::Triangle => {
+                (duration * freq as f64 * pi2).sin().asin() as f32
+            }
+        }
     }
     fn make_sample(&self, duration: Duration, end: Option<&Duration>, freq: f32) -> Frame {
         self.waveform_make_sample(duration, freq + self.freq_offset)
@@ -172,16 +166,17 @@ pub struct Synthesiser {
     end_duration: Option<Duration>,
     current_note: Option<LetterOctave>,
     frame_count: u64,
-    message_receiver: Receiver<Message>,
+    message_receiver: Receiver<SynthMessage>,
 }
 
-pub enum Message {
+#[derive(Debug)]
+pub enum SynthMessage {
     AddOscillator(Oscillator),
     MidiMessage(MidiEvent),
 }
 
 impl Synthesiser {
-    pub fn new(sample_rate: SampleRate, message_receiver: Receiver<Message>) -> Self {
+    pub fn new(sample_rate: SampleRate, message_receiver: Receiver<SynthMessage>) -> Self {
         Synthesiser {
             sample_rate,
             oscillators: Vec::new(),
@@ -212,10 +207,10 @@ impl Synthesiser {
     pub fn process_message(&mut self) {
         while let Ok(msg) = self.message_receiver.recv() {
             match msg {
-                Message::AddOscillator(oscillator) => {
+                SynthMessage::AddOscillator(oscillator) => {
                     self.add_oscillator(oscillator);
                 },
-                Message::MidiMessage(midi_event) => {
+                SynthMessage::MidiMessage(midi_event) => {
                     match midi_event {
                         MidiEvent::NoteOff(note) => {
                             if note == self.current_note.unwrap() {
