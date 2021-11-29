@@ -16,11 +16,11 @@ pub trait Envlope {
 }
 
 #[derive(Debug)]
-struct ADSR {
-    attack: f32,
-    decay: f32,
-    sustain: f32,
-    release: f32,
+pub struct ADSR {
+    pub attack: f32,
+    pub decay: f32,
+    pub sustain: f32,
+    pub release: f32,
 }
 impl Envlope for ADSR {
     fn get_envlope(&self, duration: Duration, end: Option<&Duration>) -> f32 {
@@ -65,7 +65,7 @@ pub struct Oscillator {
 impl Oscillator {
     pub fn new() -> Self {
         Oscillator {
-            volume: Volume::new(0.4).unwrap(),
+            volume: Volume::new(0.8).unwrap(),
             // waveform: Box::new(TriangleWaveform {}),
             amp: ADSR {
                 attack: 0.1,
@@ -74,12 +74,12 @@ impl Oscillator {
                 release: 2.0,
             },
             freq_offset: 0.0,
-            waveform: Waveform::Sine,
+            waveform: Waveform::Triangle,
         }
     }
     pub fn new2(freq_offset: f32) -> Self {
         Oscillator {
-            volume: Volume::new(0.1).unwrap(),
+            volume: Volume::new(0.3).unwrap(),
             // waveform: Box::new(SquareWaveform {}),
             amp: ADSR {
                 attack: 0.1,
@@ -88,7 +88,7 @@ impl Oscillator {
                 release: 2.0,
             },
             freq_offset,
-            waveform: Waveform::Sine,
+            waveform: Waveform::Triangle,
         }
     }
     fn waveform_make_sample(&self, duration: Duration, freq: f32) -> Frame {
@@ -108,7 +108,7 @@ impl Oscillator {
     }
     pub fn make_sample(&self, duration: Duration, end: Option<&Duration>, freq: f32) -> Frame {
         self.waveform_make_sample(duration, freq + self.freq_offset)
-            * self.amp.get_envlope(duration, end)
+            // * self.amp.get_envlope(duration, end)
             * self.volume.get_volume()
     }
 }

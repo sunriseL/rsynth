@@ -7,7 +7,9 @@ use pitch_calc::LetterOctave;
 use std::time::SystemTime;
 
 use crate::midi::MidiEvent;
-use crate::oscillator::Oscillator;
+use crate::oscillator::{Envlope, Oscillator};
+use super::volume::Volume;
+use super::oscillator::ADSR;
 use f32 as Frame;
 
 
@@ -19,12 +21,19 @@ pub struct Synthesiser {
     current_note: Option<LetterOctave>,
     frame_count: u64,
     message_receiver: Receiver<SynthMessage>,
+    volume: Volume,
+    amp: ADSR,
 }
 
 #[derive(Debug)]
 pub enum SynthMessage {
     AddOscillator(Oscillator),
     MidiMessage(MidiEvent),
+    ChangeVolume(f32),
+    ChangeAttack(f32),
+    ChangeDecay(f32),
+    ChangeSustain(f32),
+    ChangeRelease(f32),
 }
 
 impl Synthesiser {
@@ -37,6 +46,13 @@ impl Synthesiser {
             current_note: None,
             frame_count: 0,
             message_receiver,
+            volume: Volume::new(0.8).unwrap(),
+            amp: ADSR {
+                attack: 0.1,
+                decay: 1.0,
+                sustain: 0.5,
+                release: 0.001,
+            },
         }
     }
 
@@ -47,13 +63,16 @@ impl Synthesiser {
     pub fn next_sample(&mut self) -> Frame {
         let sample_rate = self.sample_rate.0 as f32;
         let mut frame = 0.0f32;
+        let duration = Duration::from_secs_f32(self.frame_count as f32 / sample_rate);
         if let Some(note) = self.current_note {
             for oscillator in &self.oscillators {
-                frame += oscillator.make_sample(Duration::from_secs_f32(self.frame_count as f32 / sample_rate), self.end_duration.as_ref(), note.hz())
+                frame += oscillator.make_sample(duration, self.end_duration.as_ref(), note.hz())
             }
             self.frame_count += 1;
         }
         frame
+            * self.amp.get_envlope(duration, self.end_duration.as_ref())
+            * self.volume.get_volume()
     }
 
     pub fn process_message(&mut self) {
@@ -76,6 +95,21 @@ impl Synthesiser {
                             self.end_duration = None;
                         },
                     }
+                },
+                SynthMessage::ChangeVolume(v) => {
+                    self.volume.set_volume(v).unwrap();
+                },
+                SynthMessage::ChangeAttack(value) => {
+                    self.amp.attack = value;
+                },
+                SynthMessage::ChangeDecay(value) => {
+                    self.amp.decay = value;
+                },
+                SynthMessage::ChangeSustain(value) => {
+                    self.amp.sustain = value;
+                },
+                SynthMessage::ChangeRelease(value) => {
+                    self.amp.release = value;
                 },
             }
         }

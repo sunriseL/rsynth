@@ -70,18 +70,53 @@ where
     )?;
     let original_tx =Rc::new(RefCell::new(tx));
     let tx = original_tx.clone();
-    tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::C, 3), 100))).unwrap();
+    // tx.borrow_mut().send(SynthMessage::MidiMessage(MidiEvent::NoteOn(LetterOctave(Letter::C, 3), 100))).unwrap();
     stream.play()?;
     let app = app::App::default();
     let mut wind = Window::default().with_size(1000, 800).with_label("Rsynth");
-    let mut slider = Slider::new(1000 - 50, 10, 20, 200, "Volume");
-    slider.set_align(Align::Bottom);
-    slider.set_bounds(0., 200.);
-    slider.set_value(20.);
-    slider.do_callback();
+    let mut volume_slider = Slider::new(1000 - 50, 10, 20, 200, "Volume");
+    volume_slider.set_align(Align::Bottom);
+    volume_slider.set_bounds(1., 0.);
+    volume_slider.set_value(0.8);
+    volume_slider.set_callback(move |s| {
+        tx.borrow_mut().send(SynthMessage::ChangeVolume(s.value() as f32)).unwrap();
+    });
+    let mut attack_slider = Slider::new(80, 10, 20, 200, "Attack");
+    attack_slider.set_align(Align::Bottom);
+    attack_slider.set_bounds(0.5, 0.00001);
+    attack_slider.set_value(0.01);
+    let tx = original_tx.clone();
+    attack_slider.set_callback(move |s| {
+        tx.borrow_mut().send(SynthMessage::ChangeAttack(s.value() as f32)).unwrap();
+    });
+    let mut decay_slider = Slider::new(160, 10, 20, 200, "Decay");
+    decay_slider.set_align(Align::Bottom);
+    decay_slider.set_bounds(2.0, 0.00001);
+    decay_slider.set_value(1.0);
+    let tx = original_tx.clone();
+    decay_slider.set_callback(move |s| {
+        tx.borrow_mut().send(SynthMessage::ChangeDecay(s.value() as f32)).unwrap();
+    });
+    let mut sustain_slider = Slider::new(240, 10, 20, 200, "Sustain");
+    sustain_slider.set_align(Align::Bottom);
+    sustain_slider.set_bounds(1.0, 0.);
+    sustain_slider.set_value(0.5);
+    let tx = original_tx.clone();
+    sustain_slider.set_callback(move |s| {
+        tx.borrow_mut().send(SynthMessage::ChangeSustain(s.value() as f32)).unwrap();
+    });
+    let mut release_slider = Slider::new(320, 10, 20, 200, "Release");
+    release_slider.set_align(Align::Bottom);
+    release_slider.set_bounds(3.0, 0.001);
+    release_slider.set_value(0.001);
+    let tx = original_tx.clone();
+    release_slider.set_callback(move |s| {
+        tx.borrow_mut().send(SynthMessage::ChangeRelease(s.value() as f32)).unwrap();
+    });
     wind.end();
     wind.show();
     let mut last_char = '-';
+    let tx = original_tx.clone();
     wind.handle(move |_, ev| {
         match ev {
             enums::Event::KeyDown => {
