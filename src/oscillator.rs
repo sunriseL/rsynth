@@ -8,6 +8,7 @@ enum Waveform {
     Sine,
     Triangle,
     Square,
+    Saw,
 }
 
 
@@ -74,7 +75,7 @@ impl Oscillator {
                 release: 2.0,
             },
             freq_offset: 0.0,
-            waveform: Waveform::Triangle,
+            waveform: Waveform::Sine,
         }
     }
     pub fn new2(freq_offset: f32) -> Self {
@@ -88,7 +89,7 @@ impl Oscillator {
                 release: 2.0,
             },
             freq_offset,
-            waveform: Waveform::Triangle,
+            waveform: Waveform::Sine,
         }
     }
     fn waveform_make_sample(&self, duration: Duration, freq: f32) -> Frame {
@@ -102,7 +103,16 @@ impl Oscillator {
                 if (duration * freq as f64 * pi2).sin() > 0.0 {1.0} else {-1.0}
             },
             Waveform::Triangle => {
-                (duration * freq as f64 * pi2).sin().asin() as f32
+                ((duration * freq as f64 * pi2).sin().asin() / (PI / 4.0)) as f32
+            },
+            Waveform::Saw => {
+                let s = (duration * freq as f64 * pi2).sin();
+                let c = (duration * freq as f64 * pi2).cos();
+                if s > 0.0 {
+                    (c.acos() / PI) as f32
+                } else {
+                    (-(c.acos()) / PI) as f32
+                }
             }
         }
     }

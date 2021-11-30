@@ -40,20 +40,20 @@ where
     let mut synth = synth::Synthesiser::new(config.sample_rate, rx);
     synth.add_oscillator(oscillator::Oscillator::new());
     let mut offset = -2.0f32;
-    while offset < 1.1 {
+    /*
+    while offset < 2.1 {
         synth.add_oscillator(oscillator::Oscillator::new2(offset));
-        offset += 0.25;
+        offset += 0.2;
     }
-    /*/
-    synth.add_oscillator(synth::Oscillator::new2(0.5));
-    synth.add_oscillator(synth::Oscillator::new2(1.0));
-    synth.add_oscillator(synth::Oscillator::new2(1.5));
-    synth.add_oscillator(synth::Oscillator::new2(2.0));
-    synth.add_oscillator(synth::Oscillator::new2(-0.5));
-    synth.add_oscillator(synth::Oscillator::new2(-1.0));
-    synth.add_oscillator(synth::Oscillator::new2(-1.5));
-    synth.add_oscillator(synth::Oscillator::new2(-2.0));
     */
+    synth.add_oscillator(oscillator::Oscillator::new2(0.2));
+    synth.add_oscillator(oscillator::Oscillator::new2(0.5));
+    synth.add_oscillator(oscillator::Oscillator::new2(1.2));
+    synth.add_oscillator(oscillator::Oscillator::new2(2.0));
+    synth.add_oscillator(oscillator::Oscillator::new2(-0.2));
+    synth.add_oscillator(oscillator::Oscillator::new2(-0.5));
+    synth.add_oscillator(oscillator::Oscillator::new2(-1.2));
+    synth.add_oscillator(oscillator::Oscillator::new2(-2.0));
     let mut next_value = move || {
         synth.process_message();
         synth.next_sample()
